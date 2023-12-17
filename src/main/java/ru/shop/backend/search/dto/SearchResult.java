@@ -1,8 +1,10 @@
-package ru.shop.backend.search.model;
+package ru.shop.backend.search.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import ru.shop.backend.search.model.Category;
+import ru.shop.backend.search.model.Item;
 
 import java.util.List;
 

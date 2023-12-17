@@ -168,9 +168,9 @@ public interface ItemRepository extends ElasticsearchRepository<ItemElastic, Int
     @Query("{\"term\": {\n" +
             "      \"item_id\":  \"?0\"\n" +
             "    }}")
-    List<ItemElastic> findByItemId(String itemId, PageRequest of);
+    ItemElastic findByItemId(String itemId);
 
     @Query("{\"regexp\": {\n" +
-            "      \"name\": \"?0\" }}")
+            "      \"name\": \".*?0.*\" }}")
     List<ItemElastic> findAllByName(String name, Pageable pageable);
 }
