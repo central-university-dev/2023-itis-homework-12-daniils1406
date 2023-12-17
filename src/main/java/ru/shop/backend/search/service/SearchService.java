@@ -30,21 +30,21 @@ public class SearchService {
     private final Pageable pageable = PageRequest.of(0, 150);
     private final Pageable pageableSmall = PageRequest.of(0, 10);
 
-    public SearchResult getSearchResult(Integer regionId, String text) {//это метод поиска вообще по любой колонке
+    public SearchResult getSearchResult(Integer regionId, String text) {
         List<CatalogueElastic> result = null;
         if (StringUtils.isNumeric(text)) {
             Integer itemId = repoDb.findBySku(text).stream().findFirst().orElse(null);
             if (itemId == null) {
                 var catalogue = getByName(text);
                 if (!CollectionUtils.isEmpty(catalogue)) {
-                    result = catalogue;// это значит что мы хотели найти по name потому что только он может содержать число(не считая id)
+                    result = catalogue;
                 }
             } else {
-                result = getByItemId(itemId.toString());// это значит что мы хотели найти по item_id
+                result = getByItemId(itemId.toString());
             }
-        }// БЛОК ПОВЕЩЕН ПОИСКУ ПО ЧИСЛУ, ЧИСЛО МОЖЕТ БЫТЬ ПРЕДСТАВЛЕНО ЛИБО В ВИДЕ item_id либо в виде части name, но может ничего и не найдено
+        }
         if (result == null) {
-            result = getAll(text);//todo рассмотри случай когда items это null, по моему он может nullpointer породить
+            result = getAll(text);
         }
         List<Item> items = repoDb.findByIds(regionId,
                         result.stream()
@@ -52,15 +52,15 @@ public class SearchService {
                                 .map(ItemElastic::getItemId).collect(Collectors.toList())
                 ).stream()
                 .map(arr -> new Item(((BigInteger) arr[2]).intValue(), arr[1].toString(), arr[3].toString(), arr[4].toString(), ((BigInteger) arr[0]).intValue(), arr[5].toString()))
-                .collect(Collectors.toList());// по всем найденным itemEntity собираем item, который будет содержать цену ссылку и прочее
+                .collect(Collectors.toList());
         String brand = "";
-        if (!result.isEmpty())// если нам удалось найти хотя бы один itemEntity(ВОЗМОЖНО ЛИ ЧТО ЗДЕСЬ БУДЕ ПУСТОЙ СПИСОК)
-            brand = result.get(0).getBrand().toLowerCase(Locale.ROOT);//то берем какой нибудь первый бренд
+        if (!result.isEmpty())
+            brand = result.get(0).getBrand().toLowerCase(Locale.ROOT);
         String finalBrand = brand;
-        List<Category> categories = new ArrayList<>(repoDb.findCatsByIds(items.stream().map(Item::getItemId).collect(Collectors.toList())).stream()//найти категории по id найденных предметов
+        List<Category> categories = new ArrayList<>(repoDb.findCatsByIds(items.stream().map(Item::getItemId).collect(Collectors.toList())).stream()
                 .collect(Collectors.toMap(arr -> arr[2].toString(), arr ->
                                 new Category(arr[0].toString()
-                                        , arr[1].toString()//todo возможно стало нечитабельнее и даже неправильно
+                                        , arr[1].toString()
                                         , "/cat/" + arr[2].toString() + (finalBrand.isEmpty() ? "" : "/brands/" + finalBrand)
                                         , "/cat/" + arr[3].toString(), arr[4] == null ? null : arr[4].toString())
                         , (existing, replacement) -> existing))
@@ -68,7 +68,7 @@ public class SearchService {
         return new SearchResult(
                 items,
                 categories,
-                !result.isEmpty() ? (List.of(new TypeHelpText(TypeOfQuery.SEE_ALSO,//todo так если result пустой то и все остальное пустым будет, может если result empty то мы вообще до сюда не добермся
+                !result.isEmpty() ? (List.of(new TypeHelpText(TypeOfQuery.SEE_ALSO,
                         ((result.get(0).getItems().get(0).getType() != null ? result.get(0).getItems().get(0).getType() : "") +
                                 " " + (result.get(0).getBrand() != null ? result.get(0).getBrand() : "")).trim()))) : new ArrayList<>()
         );
@@ -78,8 +78,7 @@ public class SearchService {
         return getAll(text, pageableSmall);
     }
 
-    public List<CatalogueElastic> getAll(String text, Pageable pageable) {// походу здесь подразумевается цепочка поиска, то есть мы можем искать по нескольки вещам и если находим по какой то конкретной, то вырезаем ее из текста и идем совершать поиск по оставшейся части text
-        //весь этот метод это способ понять по каким полям мы хотели осущесвтить поиск, мы просто готовим запрос для метода гет, чтобы понять по какомим полям мы хотели искать мы делаем пробные запросы, ели они хоть что то возвращают значит поле по которому ищем написано правильно и его можно отдавать методу get который уже и вернет результат поиска
+    public List<CatalogueElastic> getAll(String text, Pageable pageable) {
         String type = "";
         List<ItemElastic> list;
         String brand = "", originalText = text;
@@ -91,14 +90,14 @@ public class SearchService {
             }
             needConvert=false;
         }
-        if (text.contains(" ")) {// походу здесь сначала идет поиск по бренду, если находят то бренд вырезают из поиска и сохраняют
+        if (text.contains(" ")) {
             for (String queryWord : text.split("\\s")) {
                 list = repo.findAllByBrand(queryWord, pageable);
                 if (list.isEmpty() && needConvert) {
-                    list = repo.findAllByBrand(convert(text), pageable);//todo здесь ошибка в логике почему мы text передаем а не queryWord
+                    list = repo.findAllByBrand(convert(text), pageable);
                 }
                 if (!list.isEmpty()) {
-                    text = text.replace(queryWord, "").trim().replace("  ", " ");//?
+                    text = text.replace(queryWord, "").trim().replace("  ", " ");
                     brand = list.get(0).getBrand();
                     break;
                 }
@@ -109,21 +108,21 @@ public class SearchService {
         if (list.isEmpty() && needConvert) {
             list = repo.findAllByType(convert(text), pageable);
         }
-        if (!list.isEmpty()) {//значит text был/стал(в этом случае до этого в text хранился бренд) просто наименованием типа-> текст состоял из типа и бренда
+        if (!list.isEmpty()) {
             type = (list.stream().map(ItemElastic::getType).min(Comparator.comparingInt(String::length)).get());
         } else {
-            for (String queryWord : text.split("\\s")) {//то есть text не просто тип,нам придется пойти смотреть text дальше, может быть поиск по типу осуществляется где то дальше?
-                list = repo.findAllByType(queryWord, pageable);//todo но почему мы не вырезаем этот кусок из text?
+            for (String queryWord : text.split("\\s")) {
+                list = repo.findAllByType(queryWord, pageable);
                 if (list.isEmpty() && needConvert) {
                     list = repo.findAllByType(convert(text), pageable);
                 }
-                if (!list.isEmpty()) {//и как раз таки это говорит о том, что в text все таки был заложен поиск по типу, этот поиск мы из text вырезаем и идеи искать дальше
+                if (!list.isEmpty()) {
                     text = text.replace(queryWord, "");
                     type = (list.stream().map(ItemElastic::getType).min(Comparator.comparingInt(String::length)).get());
                 }
             }
         }
-        if (brand.isEmpty()) {//значит в text не подразумевался поиск по бренду, значит попробуем поискать по каталогу
+        if (brand.isEmpty()) {
             list = repo.findByCatalogue(text, pageable);
             if (list.isEmpty() && needConvert) {
                 list = repo.findByCatalogue(convert(text), pageable);
@@ -133,30 +132,30 @@ public class SearchService {
             }
         }
         text = text.trim();
-        if (text.isEmpty() && !brand.isEmpty())//если поиск пуст но в нем был поиск по бренду, возвращаем найденные предметы(точно не по каталогу) по типу/бренду; здесь не будет возвращен предмет найденный по каталогу
+        if (text.isEmpty() && !brand.isEmpty())
             return Collections.singletonList(new CatalogueElastic(list.get(0).getCatalogue(), list.get(0).getCatalogueId(), null, brand));
-        text += "?";//текст пуст/не пуст, но если пуст -> ТОЧНО НЕ БЫЛО ПОИСКА ПО БРЕНДУ искали по каталогу или типу
-        if (brand.isEmpty()) {// если текст пуст, то точно зайдем сюда
+        text += "?";
+        if (brand.isEmpty()) {
             type += "?";
-            if (catalogueId == null){// не было поиска по бренду, не было поиска по каталогу -> искать могли только по типу Т
+            if (catalogueId == null){
                 list = repo.findAllByType(text, type, pageable);
                 if (list.isEmpty()) {
                     list = repo.findAllByType(convert(text), type, pageable);
                 }
-            } else {// не искали по бренду, но искали по каталогу и чему то еще(по типу?) Т+К
+            } else {
                 list = repo.find(text, catalogueId, pageable);
                 if (list.isEmpty()) {
                     list = repo.find(convert(text), catalogueId, pageable);
                 }
             }
 
-        } else {//мы искали по бренду, просто текст был не пуст, мы искали по чему то еще
-            if (type.isEmpty()) {//искали по бренду Б
+        } else {
+            if (type.isEmpty()) {
                 list = repo.findAllByBrand(text, brand, pageable);
                 if (list.isEmpty()) {
                     list = repo.findAllByBrand(convert(text), brand, pageable);
                 }
-            } else {// значит хотели искать по бренду и типу Б+Т
+            } else {
                 type += "?";
                 list = repo.findAllByTypeAndBrand(text, brand, type, pageable);
                 if (list.isEmpty()) {
@@ -165,7 +164,7 @@ public class SearchService {
             }
         }
 
-        if (list.isEmpty()) {// эту фигню не понял
+        if (list.isEmpty()) {
             if (originalText.contains(" "))
                 text = String.join(" ", text.split("\\s"));
             originalText += "?";
@@ -196,13 +195,13 @@ public class SearchService {
                     }
                     map.get(i.getCatalogue()).add(i);
                 }
-        );//проходимся по списку предметов из ELK, и просто раскидываем его по разным каталогам, при этом находим какой-то один конкретный searchedItem зачем то
-        if (searchedItem.get() != null) {//то есть если мы нашли конкретный item, то просто вернем коллекцию в которой представлен будет только он один
+        );
+        if (searchedItem.get() != null) {
             ItemElastic i = searchedItem.get();
             return Collections.singletonList(new CatalogueElastic(i.getCatalogue(), i.getCatalogueId(), Collections.singletonList(i), finalBrand));
-        }//то есть если конкретного не нашли нужно вернуть примерно похожие
+        }
         return map.keySet().stream().map(c ->
-                new CatalogueElastic(c, map.get(c).get(0).getCatalogueId(), map.get(c), finalBrand)).collect(Collectors.toList());//todo для найденных по чслу бренд будет null проверь это поведение в оригинале
+                new CatalogueElastic(c, map.get(c).get(0).getCatalogueId(), map.get(c), finalBrand)).collect(Collectors.toList());
     }
 
     public List<CatalogueElastic> getByName(String num) {
